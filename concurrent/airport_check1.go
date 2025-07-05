@@ -8,39 +8,63 @@ const (
 	xRayCheckTmCost = 180
 )
 
-func idCheck() int {
+func idCheck(id int) int {
 	time.Sleep(time.Millisecond * time.Duration(idCheckTmCost))
-	println("\tidCheck ok")
+	println("\tgoroutine-", id, ": idCheck ok")
 	return idCheckTmCost
 }
 
-func bodyCheck() int {
+func bodyCheck(id int) int {
 	time.Sleep(time.Millisecond * time.Duration(bodyCheckTmCost))
-	println("\tbodyCheck ok")
+	println("\tgoroutine-", id, ": bodyCheck ok")
 	return bodyCheckTmCost
 }
 
-func xRayCheck() int {
+func xRayCheck(id int) int {
 	time.Sleep(time.Millisecond * time.Duration(xRayCheckTmCost))
-	println("\txRayCheck ok")
+	println("\tgoroutine-", id, ": xRayCheck ok")
 	return xRayCheckTmCost
 }
 
-func airportSecurityCheck() int {
-	println("airportSecurityCheck start")
+func airportSecurityCheck(id int) int {
+	println("goroutine-", id, ": airportSecurityCheck start")
 	total := 0
-	total += idCheck()
-	total += bodyCheck()
-	total += xRayCheck()
-	println("airportSecurityCheck ok")
+	total += idCheck(id)
+	total += bodyCheck(id)
+	total += xRayCheck(id)
+	println("goroutine-", id, ": airportSecurityCheck ok")
 	return total
+}
+
+func start(id int, f func(int) int, queue <-chan struct{}) <-chan int {
+	c := make(chan int)
+	go func() {
+		total := 0
+		for {
+			_, ok := <-queue
+			if !ok {
+				c <- total
+				return
+			}
+			total += f(id)
+		}
+	}()
+	return c
 }
 
 func main() {
 	total := 0
 	passenger := 30
+	c := make(chan struct{})
+	c1 := start(1, airportSecurityCheck, c)
+	c2 := start(2, airportSecurityCheck, c)
+	c3 := start(3, airportSecurityCheck, c)
+
 	for i := 0; i < passenger; i++ {
-		total += airportSecurityCheck()
+		c <- struct{}{}
 	}
+	close(c)
+
+	total = max(total, <-c1, <-c2, <-c3)
 	println("total time cost:", total)
 }
