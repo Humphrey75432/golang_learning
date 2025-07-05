@@ -8,63 +8,85 @@ const (
 	xRayCheckTmCost = 180
 )
 
-func idCheck(id int) int {
+func idCheck(id string) int {
 	time.Sleep(time.Millisecond * time.Duration(idCheckTmCost))
 	println("\tgoroutine-", id, ": idCheck ok")
 	return idCheckTmCost
 }
 
-func bodyCheck(id int) int {
+func bodyCheck(id string) int {
 	time.Sleep(time.Millisecond * time.Duration(bodyCheckTmCost))
 	println("\tgoroutine-", id, ": bodyCheck ok")
 	return bodyCheckTmCost
 }
 
-func xRayCheck(id int) int {
+func xRayCheck(id string) int {
 	time.Sleep(time.Millisecond * time.Duration(xRayCheckTmCost))
 	println("\tgoroutine-", id, ": xRayCheck ok")
 	return xRayCheckTmCost
 }
 
-func airportSecurityCheck(id int) int {
-	println("goroutine-", id, ": airportSecurityCheck start")
-	total := 0
-	total += idCheck(id)
-	total += bodyCheck(id)
-	total += xRayCheck(id)
-	println("goroutine-", id, ": airportSecurityCheck ok")
-	return total
-}
+func start(id string, f func(string) int, next chan<- struct{}) (chan<- struct{}, chan<- struct{}, <-chan int) {
+	queue := make(chan struct{}, 10)
+	quit := make(chan struct{})
+	result := make(chan int)
 
-func start(id int, f func(int) int, queue <-chan struct{}) <-chan int {
-	c := make(chan int)
 	go func() {
 		total := 0
 		for {
-			_, ok := <-queue
-			if !ok {
-				c <- total
+			select {
+			case <-quit:
+				result <- total
 				return
+			case v := <-queue:
+				total += f(id)
+				if next != nil {
+					next <- v
+				}
 			}
-			total += f(id)
 		}
 	}()
-	return c
+
+	return queue, quit, result
+}
+
+func newAirportSecurityCheckChannel(id string, queue <-chan struct{}) {
+	go func(id string) {
+		println("goroutine-", id, ": airportSecurityCheck start")
+		queue3, quit3, result3 := start(id, xRayCheck, nil)
+		queue2, quit2, result2 := start(id, bodyCheck, queue3)
+		queue1, quit1, result1 := start(id, idCheck, queue2)
+
+		for {
+			select {
+			case v, ok := <-queue:
+				if !ok {
+					close(quit1)
+					close(quit2)
+					close(quit3)
+					total := max(<-result1, <-result2, <-result3)
+					println("goroutine-", id, ": total time cost:", total)
+					println("goroutine-", id, ": airportSecurityCheck closed")
+					return
+				}
+				queue1 <- v
+			}
+		}
+	}(id)
 }
 
 func main() {
-	total := 0
 	passenger := 30
-	c := make(chan struct{})
-	c1 := start(1, airportSecurityCheck, c)
-	c2 := start(2, airportSecurityCheck, c)
-	c3 := start(3, airportSecurityCheck, c)
+	queue := make(chan struct{}, passenger)
+	newAirportSecurityCheckChannel("channel1", queue)
+	newAirportSecurityCheckChannel("channel2", queue)
+	newAirportSecurityCheckChannel("channel3", queue)
 
+	time.Sleep(5 * time.Second)
 	for i := 0; i < passenger; i++ {
-		c <- struct{}{}
+		queue <- struct{}{}
 	}
-	close(c)
-
-	total = max(total, <-c1, <-c2, <-c3)
-	println("total time cost:", total)
+	time.Sleep(5 * time.Second)
+	close(queue)
+	time.Sleep(1000 * time.Second)
 }
