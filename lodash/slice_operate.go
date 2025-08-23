@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/samber/lo"
-	lom "github.com/samber/lo/mutable"
 	"strconv"
 	"strings"
+
+	"github.com/samber/lo"
+	lom "github.com/samber/lo/mutable"
 )
 
 type User struct {
@@ -126,4 +127,8 @@ func main() {
 	lom.Reverse(orderList)
 	fmt.Printf("Reverse:%v\n", orderList)
 
+	//	Difference
+	left, right := lo.Difference([]int{0, 1, 2, 3, 4, 5}, []int{0, 2, 6})
+	fmt.Printf("Difference:%v\n", left)
+	fmt.Printf("Difference:%v\n", right)
 }
